@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  workspaces Workspace[]
+  contents   Content[]
+  schedules  Schedule[]
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  industry    String
+  tone        String
+  description String
+  color       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id])
+  userId   String
+  contents Content[]
+  schedules Schedule[]
+}
+
+model Content {
+  id          String   @id @default(cuid())
+  contentType String
+  platform    String
+  topic       String
+  tone        String
+  audience    String
+  content     String
+  imagePrompt String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  schedules   Schedule[]
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  topic     String
+  platform  String
+  date      String
+  time      String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+  content     Content?  @relation(fields: [contentId], references: [id])
+  contentId   String?
+}
