@@ -1,53 +1,84 @@
+import { apiRequest, getAuthToken } from './api';
+
 import { create } from 'zustand';
 
 // ── helpers ──────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 10);
-const now = () => new Date().toISOString();
 const persist = (key, val) => localStorage.setItem(key, JSON.stringify(val));
 const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; } };
 
 // ── auth store ────────────────────────────────────────────
 export const useAuthStore = create((set) => ({
   user: load('bf_user', null),
-  login: (email, name) => {
-    const user = { id: uid(), email, name, createdAt: now() };
-    persist('bf_user', user);
-    set({ user });
+  token: getAuthToken(),
+
+  signup: async (name, email, password) => {
+    const data = await apiRequest('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    });
+    localStorage.setItem('bf_token', data.token);
+    persist('bf_user', data.user);
+    set({ user: data.user, token: data.token });
   },
-  logout: () => { localStorage.removeItem('bf_user'); set({ user: null }); },
+
+  login: async (email, password) => {
+    const data = await apiRequest('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    localStorage.setItem('bf_token', data.token);
+    persist('bf_user', data.user);
+    set({ user: data.user, token: data.token });
+  },
+
+  logout: () => {
+    localStorage.removeItem('bf_token');
+    localStorage.removeItem('bf_user');
+    set({ user: null, token: null });
+  },
 }));
 
 // ── workspace store ───────────────────────────────────────
-const defaultWorkspaces = [
-  { id: 'ws1', name: 'My Brand', industry: 'Technology', tone: 'professional', description: 'A tech startup building the future', color: '#4f7cff', createdAt: now() },
-];
-
 export const useWorkspaceStore = create((set, get) => ({
-  workspaces: load('bf_workspaces', defaultWorkspaces),
-  activeId: load('bf_activeWs', 'ws1'),
+  workspaces: [],
+  activeId: load('bf_activeWs', null),
 
   getActive: () => get().workspaces.find(w => w.id === get().activeId),
 
   setActive: (id) => { persist('bf_activeWs', id); set({ activeId: id }); },
 
-  addWorkspace: (data) => {
-    const ws = { id: uid(), ...data, createdAt: now() };
+  loadWorkspaces: async () => {
+    const workspaces = await apiRequest('/workspaces');
+    const activeId = get().activeId;
+    const nextActive = workspaces.find(w => w.id === activeId)?.id || workspaces[0]?.id || null;
+    persist('bf_activeWs', nextActive);
+    set({ workspaces, activeId: nextActive });
+  },
+
+  addWorkspace: async (data) => {
+    const ws = await apiRequest('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
     const updated = [...get().workspaces, ws];
-    persist('bf_workspaces', updated);
-    set({ workspaces: updated, activeId: ws.id });
     persist('bf_activeWs', ws.id);
+    set({ workspaces: updated, activeId: ws.id });
     return ws;
   },
 
-  updateWorkspace: (id, data) => {
-    const updated = get().workspaces.map(w => w.id === id ? { ...w, ...data } : w);
-    persist('bf_workspaces', updated);
+  updateWorkspace: async (id, data) => {
+    const ws = await apiRequest(`/workspaces/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const updated = get().workspaces.map(w => w.id === id ? ws : w);
     set({ workspaces: updated });
   },
 
-  deleteWorkspace: (id) => {
+  deleteWorkspace: async (id) => {
+    await apiRequest(`/workspaces/${id}`, { method: 'DELETE' });
     const updated = get().workspaces.filter(w => w.id !== id);
-    persist('bf_workspaces', updated);
     const newActive = updated[0]?.id || null;
     persist('bf_activeWs', newActive);
     set({ workspaces: updated, activeId: newActive });
@@ -56,50 +87,71 @@ export const useWorkspaceStore = create((set, get) => ({
 
 // ── content store ─────────────────────────────────────────
 export const useContentStore = create((set, get) => ({
-  items: load('bf_content', []),
+  items: [],
 
   getByWorkspace: (wsId) => get().items.filter(c => c.workspaceId === wsId),
 
-  addItem: (item) => {
-    const newItem = { id: uid(), ...item, createdAt: now(), updatedAt: now() };
-    const updated = [newItem, ...get().items];
-    persist('bf_content', updated);
-    set({ items: updated });
+  loadContent: async (workspaceId) => {
+    if (!workspaceId) return;
+    const items = await apiRequest(`/content?workspaceId=${workspaceId}`);
+    set({ items });
+  },
+
+  addItem: async (item) => {
+    const newItem = await apiRequest('/content', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+    set({ items: [newItem, ...get().items] });
     return newItem;
   },
 
-  updateItem: (id, data) => {
-    const updated = get().items.map(i => i.id === id ? { ...i, ...data, updatedAt: now() } : i);
-    persist('bf_content', updated);
+  updateItem: async (id, data) => {
+    const updatedItem = await apiRequest(`/content/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const updated = get().items.map(i => i.id === id ? updatedItem : i);
     set({ items: updated });
   },
 
-  deleteItem: (id) => {
+  deleteItem: async (id) => {
+    await apiRequest(`/content/${id}`, { method: 'DELETE' });
     const updated = get().items.filter(i => i.id !== id);
-    persist('bf_content', updated);
     set({ items: updated });
   },
 }));
 
 // ── schedule store ────────────────────────────────────────
 export const useScheduleStore = create((set, get) => ({
-  scheduled: load('bf_schedule', []),
+  scheduled: [],
 
-  add: (entry) => {
-    const updated = [...get().scheduled, { id: uid(), ...entry, createdAt: now() }];
-    persist('bf_schedule', updated);
-    set({ scheduled: updated });
+  loadSchedule: async (workspaceId) => {
+    if (!workspaceId) return;
+    const scheduled = await apiRequest(`/schedule?workspaceId=${workspaceId}`);
+    set({ scheduled });
   },
 
-  remove: (id) => {
+  add: async (entry) => {
+    const newItem = await apiRequest('/schedule', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    });
+    set({ scheduled: [...get().scheduled, newItem] });
+  },
+
+  remove: async (id) => {
+    await apiRequest(`/schedule/${id}`, { method: 'DELETE' });
     const updated = get().scheduled.filter(s => s.id !== id);
-    persist('bf_schedule', updated);
     set({ scheduled: updated });
   },
 
-  update: (id, data) => {
-    const updated = get().scheduled.map(s => s.id === id ? { ...s, ...data } : s);
-    persist('bf_schedule', updated);
+  update: async (id, data) => {
+    const updatedItem = await apiRequest(`/schedule/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const updated = get().scheduled.map(s => s.id === id ? updatedItem : s);
     set({ scheduled: updated });
   },
 }));

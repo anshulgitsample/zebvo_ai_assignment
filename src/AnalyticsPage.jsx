@@ -1,11 +1,23 @@
 import { useContentStore, useScheduleStore, useWorkspaceStore } from './store';
 
 import { CONTENT_TYPES } from './aiService';
+import { useEffect } from 'react';
 
 export default function AnalyticsPage() {
   const ws = useWorkspaceStore(s => s.getActive());
-  const { getByWorkspace } = useContentStore();
-  const { scheduled } = useScheduleStore();
+  const loadWorkspaces = useWorkspaceStore(s => s.loadWorkspaces);
+  const { getByWorkspace, loadContent } = useContentStore();
+  const { scheduled, loadSchedule } = useScheduleStore();
+
+  useEffect(() => {
+    loadWorkspaces().catch(() => {});
+  }, [loadWorkspaces]);
+
+  useEffect(() => {
+    if (!ws?.id) return;
+    loadContent(ws.id).catch(() => {});
+    loadSchedule(ws.id).catch(() => {});
+  }, [ws?.id, loadContent, loadSchedule]);
 
   if (!ws) return <div className="page"><div className="empty-state"><h3>No workspace selected</h3></div></div>;
 

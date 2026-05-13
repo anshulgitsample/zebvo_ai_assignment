@@ -1,12 +1,11 @@
 import { INDUSTRIES, TONES } from './aiService';
 import { useContentStore, useToastStore, useWorkspaceStore } from './store';
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const COLORS = ['#4f7cff','#7c5cfc','#00e5b0','#ffb347','#ff4d6a','#e1306c','#0a66c2','#1da1f2'];
 
 export default function WorkspacesPage() {
-  const { workspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeId, setActive } = useWorkspaceStore();
+  const { workspaces, loadWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeId, setActive } = useWorkspaceStore();
   const { getByWorkspace } = useContentStore();
   const toast = useToastStore(s => s.show);
 
@@ -17,23 +16,35 @@ export default function WorkspacesPage() {
   const openCreate = () => { setForm({ name: '', industry: 'Technology', tone: 'professional', description: '', color: COLORS[0] }); setModal('create'); };
   const openEdit = (ws) => { setForm({ name: ws.name, industry: ws.industry, tone: ws.tone, description: ws.description || '', color: ws.color || COLORS[0] }); setModal(ws); };
 
-  const handleSave = () => {
+  useEffect(() => {
+    loadWorkspaces().catch(() => toast('Failed to load workspaces', 'error'));
+  }, [loadWorkspaces, toast]);
+
+  const handleSave = async () => {
     if (!form.name.trim()) { toast('Workspace name required', 'error'); return; }
-    if (modal === 'create') {
-      addWorkspace(form);
-      toast('Workspace created!', 'success');
-    } else {
-      updateWorkspace(modal.id, form);
-      toast('Workspace updated!', 'success');
+    try {
+      if (modal === 'create') {
+        await addWorkspace(form);
+        toast('Workspace created!', 'success');
+      } else {
+        await updateWorkspace(modal.id, form);
+        toast('Workspace updated!', 'success');
+      }
+      setModal(null);
+    } catch (err) {
+      toast(err.message || 'Workspace save failed', 'error');
     }
-    setModal(null);
   };
 
-  const handleDelete = (ws) => {
+  const handleDelete = async (ws) => {
     if (workspaces.length === 1) { toast("Can't delete your only workspace", 'error'); return; }
-    deleteWorkspace(ws.id);
-    toast('Workspace deleted', 'info');
-    setConfirmDelete(null);
+    try {
+      await deleteWorkspace(ws.id);
+      toast('Workspace deleted', 'info');
+      setConfirmDelete(null);
+    } catch (err) {
+      toast(err.message || 'Delete failed', 'error');
+    }
   };
 
   return (

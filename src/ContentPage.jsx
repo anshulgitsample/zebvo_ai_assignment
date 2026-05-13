@@ -1,13 +1,15 @@
 import { exportJSON, exportMarkdown, exportPDF, exportZIP } from './exportUtils';
 import { useContentStore, useScheduleStore, useToastStore, useWorkspaceStore } from './store';
+import { useEffect, useState } from 'react';
 
 import { CONTENT_TYPES } from './aiService';
-import { useState } from 'react';
 
 export default function ContentPage() {
   const ws = useWorkspaceStore(s => s.getActive());
-  const { getByWorkspace, updateItem, deleteItem } = useContentStore();
+  const loadWorkspaces = useWorkspaceStore(s => s.loadWorkspaces);
+  const { getByWorkspace, loadContent, updateItem, deleteItem } = useContentStore();
   const addSchedule = useScheduleStore(s => s.add);
+  const loadSchedule = useScheduleStore(s => s.loadSchedule);
   const toast = useToastStore(s => s.show);
 
   const [filter, setFilter] = useState('all');
@@ -20,6 +22,16 @@ export default function ContentPage() {
   const [schedTime, setSchedTime] = useState('10:00');
   const [exportMenu, setExportMenu] = useState(false);
 
+  useEffect(() => {
+    loadWorkspaces().catch(() => toast('Failed to load workspaces', 'error'));
+  }, [loadWorkspaces, toast]);
+
+  useEffect(() => {
+    if (!ws?.id) return;
+    loadContent(ws.id).catch(() => toast('Failed to load content', 'error'));
+    loadSchedule(ws.id).catch(() => toast('Failed to load schedule', 'error'));
+  }, [ws?.id, loadContent, loadSchedule, toast]);
+
   if (!ws) return <div className="page"><div className="empty-state"><h3>No workspace selected</h3></div></div>;
 
   const items = getByWorkspace(ws.id);
@@ -29,24 +41,36 @@ export default function ContentPage() {
     return true;
   });
 
-  const handleDelete = (id) => {
-    deleteItem(id);
-    if (selected?.id === id) setSelected(null);
-    toast('Content deleted', 'info');
+  const handleDelete = async (id) => {
+    try {
+      await deleteItem(id);
+      if (selected?.id === id) setSelected(null);
+      toast('Content deleted', 'info');
+    } catch (err) {
+      toast(err.message || 'Delete failed', 'error');
+    }
   };
 
-  const handleSaveEdit = () => {
-    updateItem(selected.id, { content: editContent });
-    setSelected({ ...selected, content: editContent });
-    setEditMode(false);
-    toast('Content updated!', 'success');
+  const handleSaveEdit = async () => {
+    try {
+      await updateItem(selected.id, { content: editContent });
+      setSelected({ ...selected, content: editContent });
+      setEditMode(false);
+      toast('Content updated!', 'success');
+    } catch (err) {
+      toast(err.message || 'Update failed', 'error');
+    }
   };
 
-  const handleSchedule = () => {
+  const handleSchedule = async () => {
     if (!schedDate) { toast('Pick a date', 'error'); return; }
-    addSchedule({ workspaceId: ws.id, contentId: scheduleModal.id, topic: scheduleModal.topic, platform: scheduleModal.contentType, date: schedDate, time: schedTime, status: 'scheduled' });
-    setScheduleModal(null);
-    toast('Post scheduled!', 'success');
+    try {
+      await addSchedule({ workspaceId: ws.id, contentId: scheduleModal.id, topic: scheduleModal.topic, platform: scheduleModal.contentType, date: schedDate, time: schedTime, status: 'scheduled' });
+      setScheduleModal(null);
+      toast('Post scheduled!', 'success');
+    } catch (err) {
+      toast(err.message || 'Failed to schedule', 'error');
+    }
   };
 
   const typeInfo = (id) => CONTENT_TYPES.find(t => t.id === id);

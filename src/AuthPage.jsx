@@ -7,15 +7,28 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const login = useAuthStore(s => s.login);
+  const signup = useAuthStore(s => s.signup);
 
-  const handle = (e) => {
+  const handle = async (e) => {
     e.preventDefault();
     setError('');
     if (!email || !password) { setError('Please fill all fields'); return; }
     if (mode === 'signup' && !name) { setError('Please enter your name'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
-    login(email, name || email.split('@')[0]);
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        await signup(name, email, password);
+      } else {
+        await login(email, password);
+      }
+    } catch (err) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,8 +58,8 @@ export default function AuthPage() {
             <input className="input" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
           {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
-          <button className="btn btn-primary w-full btn-lg" style={{ justifyContent: 'center' }}>
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+          <button className="btn btn-primary w-full btn-lg" style={{ justifyContent: 'center' }} disabled={loading}>
+            {loading ? 'Please wait...' : (mode === 'login' ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 

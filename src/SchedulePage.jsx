@@ -1,6 +1,5 @@
+import { useEffect, useState } from 'react';
 import { useScheduleStore, useToastStore, useWorkspaceStore } from './store';
-
-import { useState } from 'react';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -18,8 +17,9 @@ function getCalendarDays(year, month) {
 }
 
 export default function SchedulePage() {
-  const { scheduled, remove, update } = useScheduleStore();
+  const { scheduled, loadSchedule, remove, update } = useScheduleStore();
   const ws = useWorkspaceStore(s => s.getActive());
+  const loadWorkspaces = useWorkspaceStore(s => s.loadWorkspaces);
   const toast = useToastStore(s => s.show);
 
   const today = new Date();
@@ -27,6 +27,15 @@ export default function SchedulePage() {
   const [year, setYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState(null);
   const [view, setView] = useState('calendar');
+
+  useEffect(() => {
+    loadWorkspaces().catch(() => toast('Failed to load workspaces', 'error'));
+  }, [loadWorkspaces, toast]);
+
+  useEffect(() => {
+    if (!ws?.id) return;
+    loadSchedule(ws.id).catch(() => toast('Failed to load schedule', 'error'));
+  }, [ws?.id, loadSchedule, toast]);
 
   const wsScheduled = scheduled.filter(s => s.workspaceId === ws?.id);
   const calDays = getCalendarDays(year, month);
@@ -127,12 +136,27 @@ export default function SchedulePage() {
                         <div style={{ fontSize: 12, color: 'var(--text3)' }}>{p.platform} · {p.time}</div>
                         <div className="flex gap-2 mt-2">
                           <select className="select" style={{ fontSize: 11, padding: '3px 6px' }} value={p.status}
-                            onChange={e => { update(p.id, { status: e.target.value }); toast('Status updated', 'success'); }}>
+                            onChange={async e => {
+                              try {
+                                await update(p.id, { status: e.target.value });
+                                toast('Status updated', 'success');
+                              } catch (err) {
+                                toast(err.message || 'Update failed', 'error');
+                              }
+                            }}>
                             <option value="scheduled">Scheduled</option>
                             <option value="draft">Draft</option>
                             <option value="published">Published</option>
                           </select>
-                          <button className="btn btn-danger btn-sm" style={{ padding: '3px 8px', fontSize: 11 }} onClick={() => { remove(p.id); setSelectedDay(null); toast('Removed', 'info'); }}>Remove</button>
+                          <button className="btn btn-danger btn-sm" style={{ padding: '3px 8px', fontSize: 11 }} onClick={async () => {
+                            try {
+                              await remove(p.id);
+                              setSelectedDay(null);
+                              toast('Removed', 'info');
+                            } catch (err) {
+                              toast(err.message || 'Remove failed', 'error');
+                            }
+                          }}>Remove</button>
                         </div>
                       </div>
                     ))}
@@ -183,12 +207,26 @@ export default function SchedulePage() {
                     </div>
                     <div className="flex gap-2">
                       <select className="select" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} value={p.status}
-                        onChange={e => { update(p.id, { status: e.target.value }); toast('Updated', 'success'); }}>
+                        onChange={async e => {
+                          try {
+                            await update(p.id, { status: e.target.value });
+                            toast('Updated', 'success');
+                          } catch (err) {
+                            toast(err.message || 'Update failed', 'error');
+                          }
+                        }}>
                         <option value="scheduled">Scheduled</option>
                         <option value="draft">Draft</option>
                         <option value="published">Published</option>
                       </select>
-                      <button className="btn btn-danger btn-sm" onClick={() => { remove(p.id); toast('Removed', 'info'); }}>✕</button>
+                      <button className="btn btn-danger btn-sm" onClick={async () => {
+                        try {
+                          await remove(p.id);
+                          toast('Removed', 'info');
+                        } catch (err) {
+                          toast(err.message || 'Remove failed', 'error');
+                        }
+                      }}>✕</button>
                     </div>
                   </div>
                 </div>
@@ -209,7 +247,14 @@ export default function SchedulePage() {
                         <div style={{ fontSize: 12, color: 'var(--text3)' }}>{p.platform}</div>
                       </div>
                     </div>
-                    <button className="btn btn-danger btn-sm" onClick={() => { remove(p.id); toast('Removed', 'info'); }}>✕</button>
+                    <button className="btn btn-danger btn-sm" onClick={async () => {
+                      try {
+                        await remove(p.id);
+                        toast('Removed', 'info');
+                      } catch (err) {
+                        toast(err.message || 'Remove failed', 'error');
+                      }
+                    }}>✕</button>
                   </div>
                 </div>
               ))}

@@ -1,10 +1,10 @@
 import { CONTENT_TYPES, TONES, generateContent, generateImagePrompt } from './aiService';
 import { useContentStore, useToastStore, useWorkspaceStore } from './store';
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function GeneratorPage({ initialType }) {
   const ws = useWorkspaceStore(s => s.getActive());
+  const loadWorkspaces = useWorkspaceStore(s => s.loadWorkspaces);
   const addItem = useContentStore(s => s.addItem);
   const toast = useToastStore(s => s.show);
 
@@ -20,6 +20,11 @@ export default function GeneratorPage({ initialType }) {
   const [genningImg, setGenningImg] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
+  const [autoSave, setAutoSave] = useState(true);
+
+  useEffect(() => {
+    loadWorkspaces().catch(() => toast('Failed to load workspaces', 'error'));
+  }, [loadWorkspaces, toast]);
 
   if (!ws) return (
     <div className="page">
@@ -30,6 +35,20 @@ export default function GeneratorPage({ initialType }) {
     </div>
   );
 
+  const saveContent = async (content) => {
+    await addItem({
+      workspaceId: ws.id,
+      workspaceName: ws.name,
+      contentType: type,
+      platform: CONTENT_TYPES.find(t2 => t2.id === type)?.platform,
+      topic,
+      tone: tone || ws?.tone || 'professional',
+      audience: audience?.trim() || 'general audience',
+      content,
+      imagePrompt: imgPrompt,
+    });
+  };
+
   const handleGenerate = async () => {
     if (!topic.trim()) { toast('Please enter a topic', 'error'); return; }
     setGenerating(true); setStreaming(''); setResult(''); setSaved(false); setImgPrompt(''); setEditMode(false);
@@ -39,7 +58,13 @@ export default function GeneratorPage({ initialType }) {
         onChunk: (text) => setStreaming(text),
       });
       setResult(final); setStreaming('');
-      toast('Content generated!', 'success');
+      if (autoSave) {
+        await saveContent(final);
+        setSaved(true);
+        toast('Generated and saved to content library!', 'success');
+      } else {
+        toast('Content generated!', 'success');
+      }
     } catch (err) {
       toast(err.message || 'Generation failed', 'error');
     } finally {
@@ -47,15 +72,15 @@ export default function GeneratorPage({ initialType }) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const content = editMode ? editedContent : result;
-    addItem({
-      workspaceId: ws.id, workspaceName: ws.name,
-      contentType: type, platform: CONTENT_TYPES.find(t2 => t2.id === type)?.platform,
-      topic, tone, audience, content, imagePrompt: imgPrompt,
-    });
-    setSaved(true);
-    toast('Saved to content library!', 'success');
+    try {
+      await saveContent(content);
+      setSaved(true);
+      toast('Saved to content library!', 'success');
+    } catch (err) {
+      toast(err.message || 'Failed to save content', 'error');
+    }
   };
 
   const handleRegenerate = () => {
@@ -133,6 +158,10 @@ export default function GeneratorPage({ initialType }) {
                 {TONES.map(t2 => <option key={t2.id} value={t2.id}>{t2.label}</option>)}
               </select>
             </div>
+            <label className="flex items-center gap-2" style={{ fontSize: 12, color: 'var(--text2)', marginTop: 12 }}>
+              <input type="checkbox" checked={autoSave} onChange={e => setAutoSave(e.target.checked)} />
+              Auto-save generated content to the library
+            </label>
           </div>
 
           <button className="btn btn-primary btn-lg w-full" style={{ justifyContent: 'center' }} onClick={handleGenerate} disabled={generating || !topic.trim()}>
@@ -192,7 +221,7 @@ export default function GeneratorPage({ initialType }) {
 
               {result && (
                 <div className="flex gap-2 mt-4" style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-                  <button className="btn btn-success" onClick={handleSave} disabled={saved}>
+                  <button className="btn btn-success" onClick={handleSave} disabled={saved || autoSave}>
                     {saved ? '✓ Saved' : '💾 Save'}
                   </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(editMode ? editedContent : result); toast('Copied!', 'success'); }}>

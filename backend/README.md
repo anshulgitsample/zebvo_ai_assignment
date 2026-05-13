@@ -16,6 +16,15 @@ This folder contains the backend API for authentication, workspaces, content sto
 3. Run Prisma migration
 4. Start the server
 
+### Quick commands
+```
+npm install
+cp .env.example .env
+npm run generate
+npm run migrate -- --name init
+npm run dev
+```
+
 ## Example environment
 ```
 DATABASE_URL="file:./dev.db"

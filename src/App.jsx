@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { useAuthStore, useWorkspaceStore, useToastStore } from './store';
+import { useAuthStore, useToastStore, useWorkspaceStore } from './store';
+
+import AnalyticsPage from './AnalyticsPage';
 import AuthPage from './AuthPage';
+import ContentPage from './ContentPage';
 import Dashboard from './Dashboard';
 import GeneratorPage from './GeneratorPage';
-import ContentPage from './ContentPage';
 import SchedulePage from './SchedulePage';
-import AnalyticsPage from './AnalyticsPage';
 import WorkspacesPage from './WorkspacesPage';
+import { useState } from 'react';
 
 // ── Toast renderer ────────────────────────────────────────
 function ToastContainer() {
@@ -40,8 +41,7 @@ function ToastContainer() {
 // ── Sidebar ───────────────────────────────────────────────
 function Sidebar({ active, onNavigate }) {
   const { user, logout } = useAuthStore();
-  const { workspaces, activeId, setActive, getActive } = useWorkspaceStore();
-  const ws = getActive();
+  const { workspaces, activeId, setActive } = useWorkspaceStore();
 
   const navItems = [
     { id: 'dashboard', icon: '⊞', label: 'Dashboard' },

@@ -14,3 +14,12 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Backend API wiring
+
+This frontend expects the backend API to run on `http://localhost:5050` (see `VITE_API_BASE_URL` in `.env`).
+
+1. Start the backend from `backend/` (see `backend/README.md` for Prisma setup).
+2. Start the frontend dev server.
+
+The UI will use the backend for auth, workspaces, content, scheduling, analytics, and AI generation.

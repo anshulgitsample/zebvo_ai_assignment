@@ -1,3 +1,5 @@
+import { getApiBase } from './api';
+
 // ── Prompt Templates ─────────────────────────────────────
 const PROMPTS = {
   instagram: ({ brand, industry, tone, topic, audience }) =>
@@ -146,6 +148,204 @@ Format:
 Return ONLY the script in this format.`,
 };
 
+const API_BASE = getApiBase();
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('bf_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const extractGeminiText = (data) => data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+const isMissingServerKey = (err) => /Missing GEMINI_API_KEY/i.test(err?.message || '');
+const isNetworkError = (err) => /Failed to fetch|NetworkError|fetch failed|Load failed|Network request failed/i.test(err?.message || '');
+const isGeminiError = (err) => /Gemini API request failed|API key|permission|quota|invalid/i.test(err?.message || '');
+const toNetworkError = (err) => {
+  const error = new Error('Backend unreachable. Make sure the API server is running.');
+  error.cause = err;
+  error.code = 'NETWORK_ERROR';
+  return error;
+};
+
+const localGenerateContent = ({ type, brand, industry, tone, topic, audience }) => {
+  const safeBrand = brand || 'your brand';
+  const safeIndustry = industry || 'your industry';
+  const safeTone = tone || 'professional';
+  const safeTopic = topic || 'your latest update';
+  const safeAudience = audience || 'your audience';
+
+  switch (type) {
+    case 'instagram':
+      return `✨ ${safeBrand} is here to help with ${safeTopic}.
+
+We’re building ${safeIndustry} solutions with a ${safeTone} touch for ${safeAudience}.
+From planning to launch, we focus on clarity, speed, and impact.
+Ready to get started? Let’s talk.
+
+#startup #buildinpublic #${safeIndustry.replace(/\s+/g, '').toLowerCase()} #productlaunch #growth`;
+    case 'linkedin':
+      return `Launching in ${safeIndustry} isn’t just about features — it’s about outcomes.
+
+At ${safeBrand}, we’re focused on ${safeTopic} with a ${safeTone} approach that puts ${safeAudience} first.
+
+Key takeaways:
+- Align with the real business problem
+- Build for speed and clarity
+- Measure outcomes, not just outputs
+
+If you’re working on similar initiatives, let’s connect.
+
+#${safeIndustry.replace(/\s+/g, '')} #product #leadership`;
+    case 'twitter':
+      return `1/ ${safeBrand} is sharing lessons on ${safeTopic} 🚀
+2/ In ${safeIndustry}, speed + clarity win.
+3/ Our ${safeTone} playbook: focus, feedback, iteration.
+4/ The result: better outcomes for ${safeAudience}.
+5/ Want the details? Let’s chat. #${safeIndustry.replace(/\s+/g, '').toLowerCase()}`;
+    case 'hashtags':
+      return `**Brand & Niche (5):** #${safeBrand.replace(/\s+/g, '')} #${safeIndustry.replace(/\s+/g, '')} #buildbetter #startuplife #productteam
+**Topic Specific (8):** #${safeTopic.split(' ')[0]} #productlaunch #appdevelopment #webdesign #uxdesign #growthmarketing #saas #innovation
+**Discovery & Trending (7):** #tech #startup #founders #productivity #digital #marketing #business`;
+    case 'carousel':
+      return `---SLIDE 1---
+TITLE: ${safeTopic}
+BODY: The simple way ${safeBrand} helps ${safeAudience}
+VISUAL TIP: Bold title with clean icons
+
+---SLIDE 2---
+TITLE: The challenge
+BODY: In ${safeIndustry}, speed and clarity are everything.
+VISUAL TIP: Timeline or roadmap
+
+---SLIDE 3---
+TITLE: Our approach
+BODY: A ${safeTone} workflow focused on outcomes.
+VISUAL TIP: Process steps
+
+---SLIDE 4---
+TITLE: What you get
+BODY: Strategy, build, launch — all in one place.
+VISUAL TIP: Checklist
+
+---SLIDE 5---
+TITLE: Real impact
+BODY: Faster delivery and stronger results.
+VISUAL TIP: Upward chart
+
+---SLIDE 6---
+TITLE: For ${safeAudience}
+BODY: Built to scale with your goals.
+VISUAL TIP: Audience silhouettes
+
+---SLIDE 7---
+TITLE: Let’s build
+BODY: Ready to start? Reach out today.
+VISUAL TIP: CTA button`;
+    case 'campaign':
+      return `**Campaign Name:** ${safeBrand} Momentum
+**Tagline:** Build faster, launch smarter
+**Goal:** Drive awareness and leads
+**Duration:** 7 days
+
+**Content Calendar (7 days):**
+Day 1: Instagram - Launch teaser
+Day 2: LinkedIn - Founder story
+Day 3: Twitter/X - Key insights
+Day 4: Instagram - Customer value
+Day 5: LinkedIn - Case study
+Day 6: Twitter/X - AMA thread
+Day 7: Instagram - CTA + offer
+
+**Key Messages (3):**
+1. ${safeBrand} simplifies ${safeTopic}
+2. ${safeTone} delivery for ${safeAudience}
+3. Results that scale
+
+**Success Metrics:**
+- Reach
+- Engagement
+- Leads`;
+    case 'marketing':
+      return `**Tagline (5-8 words):**
+${safeBrand} builds what you need
+
+**Ad Headline (Facebook/Google):**
+Launch your next ${safeTopic}
+
+**Ad Description (30 words):**
+${safeBrand} helps ${safeAudience} in ${safeIndustry} plan, build, and launch with confidence. Get a ${safeTone} team that delivers fast.
+
+**Email Subject Line:**
+Ready to ship your next product?
+
+**SMS/WhatsApp Message (160 chars):**
+${safeBrand} can help you launch ${safeTopic} quickly. Want a quick call?
+
+**Bio/Profile Description (150 chars):**
+${safeBrand} builds ${safeIndustry} products for ${safeAudience}. Strategy, design, and development — end to end.`;
+    case 'reel':
+      return `**TITLE:** ${safeTopic} in 30 seconds
+**HOOK (0-3 sec):** “Want to launch faster?”
+**SCRIPT:**
+[0:00-0:05] Show the challenge in ${safeIndustry}
+[0:05-0:15] Introduce ${safeBrand} and the ${safeTone} approach
+[0:15-0:25] Show outcomes for ${safeAudience}
+[0:25-0:35] Quick proof points and visuals
+[0:35-0:45] CTA: “Let’s build together”
+
+**CAPTIONS:** 3 ways to launch smarter with ${safeBrand}
+**HASHTAGS:** #${safeIndustry.replace(/\s+/g, '').toLowerCase()} #startup #product
+**TRENDING AUDIO SUGGESTION:** Motivational upbeat`;
+    default:
+      return `${safeBrand} update: ${safeTopic}`;
+  }
+};
+
+const localGenerateImagePrompt = ({ brand, industry, topic, style }) => (
+  `Create a ${style} social media image for ${brand} in the ${industry} space about “${topic}”. ` +
+  'Use clean composition, bold typography, and a confident color palette. ' +
+  'Include subtle tech motifs, soft gradients, and space for a short headline.'
+);
+
+async function requestBackendStream(prompt) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ prompt, stream: true }),
+    });
+  } catch (err) {
+    throw toNetworkError(err);
+  }
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'AI request failed');
+  }
+
+  return response;
+}
+
+async function requestBackendText(prompt) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ prompt, stream: false }),
+    });
+  } catch (err) {
+    throw toNetworkError(err);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'AI request failed');
+  }
+
+  return extractGeminiText(data);
+}
+
 const PREFERRED_GEMINI_MODELS = [
   'gemini-1.5-flash-latest',
   'gemini-1.5-flash',
@@ -255,18 +455,108 @@ export async function generateContent({ type, brand, industry, tone, topic, audi
 
   const prompt = promptFn({ brand, industry, tone, topic, audience });
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (API_BASE) {
+    let response;
+    try {
+      response = await requestBackendStream(prompt);
+    } catch (err) {
+      if ((isMissingServerKey(err) || err.code === 'NETWORK_ERROR' || isNetworkError(err)) && apiKey) {
+        try {
+          const { text } = await requestGeminiText(prompt, apiKey);
+          onChunk?.(text, text);
+          return text;
+        } catch (geminiErr) {
+          if (isGeminiError(geminiErr)) {
+            const text = localGenerateContent({ type, brand, industry, tone, topic, audience });
+            onChunk?.(text, text);
+            return text;
+          }
+          throw geminiErr;
+        }
+      }
+      try {
+        const text = await requestBackendText(prompt);
+        onChunk?.(text, text);
+        return text;
+      } catch (fallbackErr) {
+        if ((isMissingServerKey(fallbackErr) || fallbackErr.code === 'NETWORK_ERROR' || isNetworkError(fallbackErr)) && apiKey) {
+          try {
+            const { text } = await requestGeminiText(prompt, apiKey);
+            onChunk?.(text, text);
+            return text;
+          } catch (geminiErr) {
+            if (isGeminiError(geminiErr)) {
+              const text = localGenerateContent({ type, brand, industry, tone, topic, audience });
+              onChunk?.(text, text);
+              return text;
+            }
+            throw geminiErr;
+          }
+        }
+        throw fallbackErr;
+      }
+    }
+
+    if (!response.body) {
+      const text = await requestBackendText(prompt);
+      onChunk?.(text, text);
+      return text;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data) continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const chunk = extractGeminiText(parsed);
+          if (chunk) {
+            fullText += chunk;
+            onChunk?.(fullText, chunk);
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    }
+
+    return fullText;
+  }
 
   if (!apiKey) {
-    throw new Error('Please add VITE_GEMINI_API_KEY to your .env file');
+    const text = localGenerateContent({ type, brand, industry, tone, topic, audience });
+    onChunk?.(text, text);
+    return text;
   }
 
   let response;
   try {
     ({ response } = await requestGeminiStream(prompt, apiKey));
   } catch {
-    const { text } = await requestGeminiText(prompt, apiKey);
-    onChunk?.(text, text);
-    return text;
+    try {
+      const { text } = await requestGeminiText(prompt, apiKey);
+      onChunk?.(text, text);
+      return text;
+    } catch (geminiErr) {
+      if (isGeminiError(geminiErr)) {
+        const text = localGenerateContent({ type, brand, industry, tone, topic, audience });
+        onChunk?.(text, text);
+        return text;
+      }
+      throw geminiErr;
+    }
   }
 
   const reader = response.body.getReader();
@@ -303,12 +593,6 @@ export async function generateContent({ type, brand, industry, tone, topic, audi
 
 // ── Image description generator (simulated) ──────────────
 export async function generateImagePrompt({ brand, industry, topic, style = 'modern' }) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('Please add VITE_GEMINI_API_KEY to your .env file');
-  }
-
   const prompt = `Create a detailed image generation prompt for a social media post.
 Brand: ${brand} (${industry})
 Topic: ${topic}
@@ -318,8 +602,31 @@ Write a single, detailed prompt (100-150 words) for generating a professional so
 Include: composition, colors, mood, style elements, and brand feel.
 Return ONLY the image prompt, no explanations.`;
 
-  const { text } = await requestGeminiText(prompt, apiKey);
-  return text;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+  if (API_BASE) {
+    try {
+      return await requestBackendText(prompt);
+    } catch (err) {
+      if ((!isMissingServerKey(err) && !isNetworkError(err) && err.code !== 'NETWORK_ERROR') || !apiKey) {
+        throw err;
+      }
+    }
+  }
+
+  if (!apiKey) {
+    return localGenerateImagePrompt({ brand, industry, topic, style });
+  }
+
+  try {
+    const { text } = await requestGeminiText(prompt, apiKey);
+    return text;
+  } catch (err) {
+    if (isGeminiError(err)) {
+      return localGenerateImagePrompt({ brand, industry, topic, style });
+    }
+    throw err;
+  }
 }
 
 export const CONTENT_TYPES = [
